@@ -343,6 +343,7 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.72.2",
     "typia": "^12.0.2",
+    "vitest": "^5.1.1",
     "zone.js": "^0.16.3"
   },
   "overrides": {
@@ -391,5 +392,17 @@
   "volta": {
     "node": "22.23.3",
     "npm": "11.18.0"
+  },
+  "allowScripts": {
+    "@parcel/watcher@2.6.0": true,
+    "@prisma/client@5.22.0": true,
+    "@prisma/engines@5.22.0": true,
+    "core-js@3.49.0": true,
+    "electron-winstaller@5.4.0": true,
+    "esbuild@0.28.2": true,
+    "lmdb@3.5.6": true,
+    "msgpackr-extract@3.0.7": true,
+    "prisma@5.22.0": true,
+    "fsevents@2.3.3": true
   }
 }
