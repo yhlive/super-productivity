@@ -171,6 +171,25 @@
               <worklog-week></worklog-week>
             </section>
           }
+          @if (completedWithoutTime$ | async; as untimed) {
+            @if (untimed.length) {
+              <section style="margin-bottom: 32px">
+                <h2>{{ T.PDS.COMPLETED_WITHOUT_TIME | translate }}</h2>
+                <ul>
+                  @for (task of untimed; track task.id) {
+                    <li>
+                      <button
+                        mat-button
+                        (click)="openUntimaedTask(task)"
+                      >
+                        {{ task.title }}
+                      </button>
+                    </li>
+                  }
+                </ul>
+              </section>
+            }
+          }
           @if (tasks.length) {
             <task-summary-tables
               [dayStr]="dayStr"

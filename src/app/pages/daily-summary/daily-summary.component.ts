@@ -76,6 +76,10 @@ import { unToggleCheckboxesInMarkdownTxt } from '../../util/untoggle-checkboxes-
 import { PlanTasksTomorrowComponent } from './plan-tasks-tomorrow/plan-tasks-tomorrow.component';
 import { PlanTasksNextWeekComponent } from './plan-tasks-next-week/plan-tasks-next-week.component';
 import { isFinishWeekScope } from './finish-week.util';
+import { completedWithoutTime } from './completed-without-time';
+import { getDbDateStrWithOffset } from '../../util/get-db-date-str';
+import { DialogTimeEstimateComponent } from '../../features/tasks/dialog-time-estimate/dialog-time-estimate.component';
+import { DialogViewArchivedTaskComponent } from '../../features/tasks/dialog-view-archived-task/dialog-view-archived-task.component';
 import {
   SimpleCounterSummaryItem,
   SimpleCounterSummaryItemComponent,
@@ -188,6 +192,35 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
     shareReplay({ bufferSize: 1, refCount: true }),
   );
 
+  readonly completedWithoutTime$ = this.dayStr$.pipe(
+    switchMap((day) =>
+      this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
+        map((tasks) =>
+          completedWithoutTime(tasks, day, this._dateService.getStartOfNextDayDiffMs()),
+        ),
+      ),
+    ),
+  );
+
+  openUntimaedTask(task: Task): void {
+    this._taskService.getByIdOnce$(task.id).subscribe((liveTask) => {
+      if (liveTask) {
+        this._matDialog.open(DialogTimeEstimateComponent, {
+          restoreFocus: true,
+          data: {
+            task: liveTask,
+          },
+        });
+      } else {
+        this._matDialog.open(DialogViewArchivedTaskComponent, {
+          restoreFocus: true,
+          data: {
+            task,
+          },
+        });
+      }
+    });
+  }
   isArchiveLoaded = signal(false);
 
   hasTasksForToday$: Observable<boolean> = this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
@@ -561,7 +594,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
   private _getDailySummaryTasksFlat$(dayStr: string): Observable<Task[]> {
     this.isArchiveLoaded.set(false);
     const _isWorkedOnDoneOrDueToday = (() => {
-      if (this.isIncludeYesterday) {
+      if (this.isIncludeYesterday && this._dateService.todayStr() === dayStr) {
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayStr = this._dateService.todayStr(yesterday);
@@ -584,7 +617,12 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
             t.timeSpentOnDay?.[dayStr] &&
             t.timeSpentOnDay?.[dayStr] > 0) ||
           (t.dueDay && t.dueDay === dayStr) ||
-          (t.isDone && t.doneOn && this._dateService.isToday(t.doneOn));
+          (t.isDone &&
+            t.doneOn != null &&
+            getDbDateStrWithOffset(
+              t.doneOn,
+              this._dateService.getStartOfNextDayDiffMs(),
+            ) === dayStr);
       }
     })();
 
