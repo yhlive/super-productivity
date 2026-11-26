@@ -2107,6 +2107,12 @@
         "TITLE": "为当天添加"
       },
       "MULTI_SELECT": {
+        "NEXT_WORKDAY": {
+          "TITLE": "为下一个工作日计划",
+          "REVIEW": "{{eligible}} 将被移动到 {{date}}。{{skipped}} 将保持不变。",
+          "APPLY": "应用",
+          "CHANGED": "{{count}} 个任务已更改"
+        },
         "ACTIONS": "操作",
         "CLEAR": "清除选择",
         "D_CONFIRM_DELETE": {

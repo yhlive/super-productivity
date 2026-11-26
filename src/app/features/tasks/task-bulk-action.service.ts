@@ -4,6 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { firstValueFrom } from 'rxjs';
 import { first } from 'rxjs/operators';
 import { TaskService } from './task.service';
+import { canPlanForWorkday, nextWorkday } from './next-workday';
 import { TaskMultiSelectService } from './task-multi-select.service';
 import { TaskMoveToProjectService } from './task-move-to-project.service';
 import { ProjectService } from '../project/project.service';
@@ -339,6 +340,45 @@ export class TaskBulkActionService {
   }
 
   // ---- SCHEDULE ---------------------------------------------------------
+  async planForNextWorkday(): Promise<void> {
+    const date = nextWorkday(this._dateService.getLogicalTodayDate());
+    const day = getDbDateStr(date);
+    const selected = this._resolveInVisualOrder();
+    const eligible = selected.filter((task) => canPlanForWorkday(task, day));
+    if (!eligible.length) {
+      this._snackNothingToDo();
+      return;
+    }
+    const lables = T.F.TASK.MULTI_SELECT.NEXT_WORKDAY;
+    const confirmet = await firstValueFrom(
+      this._matDialog
+        .open(DialogConfirmComponent, {
+          data: {
+            title: lables.TITLE,
+            message: lables.REVIEW,
+            okTxt: lables.APPLY,
+            translateParams: {
+              date: day,
+              eligible: eligible.length,
+              skipped: selected.length - eligible.length,
+            },
+          },
+        })
+        .afterClosed(),
+    );
+    if (!confirmet) {
+      return;
+    }
+    const ids = new Set(eligible.map((task) => task.id));
+    const current = this._resolveInVisualOrder().filter(
+      (task) => ids.has(task.id) && canPlanForWorkday(task, day),
+    );
+    if (!current.length) {
+      this._snackService.open({ msg: lables.CHANGED });
+      return;
+    }
+    await this.scheduleFor({ date, time: null, remindOption: null }, current);
+  }
 
   async openScheduleDialog(): Promise<void> {
     const tasks = this._resolveInVisualOrder().filter((t) => !t.isDone);

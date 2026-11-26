@@ -63,6 +63,16 @@
     </span>
     <span class="key-i">{{ kb().taskSchedule }}</span>
   </button>
+  <button
+    (click)="bulk.planForNextWorkday()"
+    (disabled)="!bulk.hasUndone()"
+    mat-menu-item
+  >
+    <span class="menuItemLeft">
+      <mat-icon>next_week</mat-icon>
+      {{ T.F.TASK.MULTI_SELECT.NEXT_WORKDAY.TITLE | translate }}
+    </span>
+  </button>
   @if (bulk.hasScheduled()) {
     <button
       (click)="bulk.unschedule()"

@@ -2107,6 +2107,12 @@
         "TITLE": "Add for Day"
       },
       "MULTI_SELECT": {
+        "NEXT_WORKDAY": {
+          "TITLE": "Plan for next workday",
+          "REVIEW": "{{eligible}} will move to {{date}}. {{skipped}} will stay as they are.",
+          "APPLY": "Apply",
+          "CHANGED": "The selection changed. Open the preview again."
+        },
         "ACTIONS": "Actions",
         "CLEAR": "Clear selection",
         "D_CONFIRM_DELETE": {
