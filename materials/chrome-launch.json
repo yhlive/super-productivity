@@ -1,0 +1,14 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Super Productivity · Chrome",
+      "type": "chrome",
+      "request": "launch",
+      "url": "http://localhost:4211/#/tag/TODAY/tasks",
+      "webRoot": "${workspaceFolder}",
+      "userDataDir": "${workspaceFolder}/.tmp/workshop-chrome",
+      "sourceMaps": true
+    }
+  ]
+}

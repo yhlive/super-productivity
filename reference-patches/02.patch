@@ -1,0 +1,187 @@
+diff --git a/src/app/pages/daily-summary/completed-without-time.spec.ts b/src/app/pages/daily-summary/completed-without-time.spec.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..b6598c1a54da246c0b23ea5f1eb9de2bb0ffdc87
+--- /dev/null
++++ b/src/app/pages/daily-summary/completed-without-time.spec.ts
+@@ -0,0 +1,33 @@
++import { Task } from '../../features/tasks/task.model';
++import { completedWithoutTime } from './completed-without-time';
++
++describe('Completed without time', () => {
++  const day = '2026-12-04';
++  const dayBefore = '2026-12-03';
++  const doneOn = +new Date(2026, 11, 4, 15);
++  const row = (id: string, extra: Partial<Task> = {}): Task =>
++    ({ id, isDone: true, doneOn, subTaskIds: [], ...extra }) as Task;
++
++  it('selects only completed leaves with zero or missing time on the selected date', () => {
++    const tasks = [
++      row('missing'),
++      row('zero', { timeSpentOnDay: { [day]: 0, [dayBefore]: 500 } }),
++      row('logged', { timeSpentOnDay: { [day]: 500 } }),
++      row('open', { isDone: false }),
++      row('parent', { subTaskIds: ['missing'] }),
++      row('skipped', { wontDoOn: doneOn }),
++      row('different-day', { doneOn: +new Date(2026, 11, 3, 15) }),
++    ];
++    expect(completedWithoutTime(tasks, day, 0).map(({ id }) => id)).toEqual([
++      'missing',
++      'zero',
++    ]);
++  });
++
++  it('uses the configured logical day around midnight', () => {
++    const afterMidnight = row('late', { doneOn: +new Date(2026, 11, 5, 1) });
++    expect(completedWithoutTime([afterMidnight], day, 2 * 60 * 60 * 1000)).toEqual([
++      afterMidnight,
++    ]);
++  });
++});
+diff --git a/src/app/pages/daily-summary/completed-without-time.ts b/src/app/pages/daily-summary/completed-without-time.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..ac5bd63e9c42cfdc0b8624b86f5b65c84ecbf09a
+--- /dev/null
++++ b/src/app/pages/daily-summary/completed-without-time.ts
+@@ -0,0 +1,17 @@
++import { Task } from '../../features/tasks/task.model';
++import { isCompletedTask } from '../../features/tasks/util/is-wont-do-task';
++import { getDbDateStrWithOffset } from '../../util/get-db-date-str';
++
++export const completedWithoutTime = (
++  tasks: readonly Task[],
++  day: string,
++  offsetMs: number,
++): Task[] =>
++  tasks.filter(
++    (task) =>
++      isCompletedTask(task) &&
++      task.doneOn != null &&
++      getDbDateStrWithOffset(task.doneOn, offsetMs) === day &&
++      !task.subTaskIds?.length &&
++      (task.timeSpentOnDay?.[day] ?? 0) === 0,
++  );
+diff --git a/src/app/pages/daily-summary/daily-summary.component.html b/src/app/pages/daily-summary/daily-summary.component.html
+index 11fec65fe78088ed3053b8061f11ef6c01ad552e..1a5fc63f29453cf3d48dffa0a91426e79c3b1ec5 100644
+--- a/src/app/pages/daily-summary/daily-summary.component.html
++++ b/src/app/pages/daily-summary/daily-summary.component.html
+@@ -171,6 +171,25 @@
+               <worklog-week></worklog-week>
+             </section>
+           }
++          @if (completedWithoutTime$ | async; as untimed) {
++            @if (untimed.length) {
++              <section>
++                <h2>{{ T.PDS.COMPLETED_WITHOUT_TIME | translate }}</h2>
++                <ul>
++                  @for (task of untimed; track task.id) {
++                    <li>
++                      <button
++                        mat-button
++                        (click)="openUntimedTask(task)"
++                      >
++                        {{ task.title }}
++                      </button>
++                    </li>
++                  }
++                </ul>
++              </section>
++            }
++          }
+           @if (tasks.length) {
+             <task-summary-tables
+               [dayStr]="dayStr"
+diff --git a/src/app/pages/daily-summary/daily-summary.component.ts b/src/app/pages/daily-summary/daily-summary.component.ts
+index cdf1467a5db1bed088ac778e3d9778f03b88448e..e5b66056ce92ba464208e8b391ebe7817daaf0d8 100644
+--- a/src/app/pages/daily-summary/daily-summary.component.ts
++++ b/src/app/pages/daily-summary/daily-summary.component.ts
+@@ -76,6 +76,10 @@ import { unToggleCheckboxesInMarkdownTxt } from '../../util/untoggle-checkboxes-
+ import { PlanTasksTomorrowComponent } from './plan-tasks-tomorrow/plan-tasks-tomorrow.component';
+ import { PlanTasksNextWeekComponent } from './plan-tasks-next-week/plan-tasks-next-week.component';
+ import { isFinishWeekScope } from './finish-week.util';
++import { completedWithoutTime } from './completed-without-time';
++import { getDbDateStrWithOffset } from '../../util/get-db-date-str';
++import { DialogTimeEstimateComponent } from '../../features/tasks/dialog-time-estimate/dialog-time-estimate.component';
++import { DialogViewArchivedTaskComponent } from '../../features/tasks/dialog-view-archived-task/dialog-view-archived-task.component';
+ import {
+   SimpleCounterSummaryItem,
+   SimpleCounterSummaryItemComponent,
+@@ -188,6 +192,32 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
+     shareReplay({ bufferSize: 1, refCount: true }),
+   );
+ 
++  readonly completedWithoutTime$ = this.dayStr$.pipe(
++    switchMap((day) =>
++      this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
++        map((tasks) =>
++          completedWithoutTime(tasks, day, this._dateService.getStartOfNextDayDiffMs()),
++        ),
++      ),
++    ),
++  );
++
++  openUntimedTask(task: Task): void {
++    this._taskService.getByIdOnce$(task.id).subscribe((liveTask) => {
++      if (liveTask) {
++        this._matDialog.open(DialogTimeEstimateComponent, {
++          restoreFocus: true,
++          data: { task: liveTask },
++        });
++      } else {
++        this._matDialog.open(DialogViewArchivedTaskComponent, {
++          restoreFocus: true,
++          data: { task },
++        });
++      }
++    });
++  }
++
+   isArchiveLoaded = signal(false);
+ 
+   hasTasksForToday$: Observable<boolean> = this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
+@@ -561,7 +591,7 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
+   private _getDailySummaryTasksFlat$(dayStr: string): Observable<Task[]> {
+     this.isArchiveLoaded.set(false);
+     const _isWorkedOnDoneOrDueToday = (() => {
+-      if (this.isIncludeYesterday) {
++      if (this.isIncludeYesterday && dayStr === this._dateService.todayStr()) {
+         const yesterday = new Date();
+         yesterday.setDate(yesterday.getDate() - 1);
+         const yesterdayStr = this._dateService.todayStr(yesterday);
+@@ -584,7 +614,12 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
+             t.timeSpentOnDay?.[dayStr] &&
+             t.timeSpentOnDay?.[dayStr] > 0) ||
+           (t.dueDay && t.dueDay === dayStr) ||
+-          (t.isDone && t.doneOn && this._dateService.isToday(t.doneOn));
++          (t.isDone &&
++            t.doneOn != null &&
++            getDbDateStrWithOffset(
++              t.doneOn,
++              this._dateService.getStartOfNextDayDiffMs(),
++            ) === dayStr);
+       }
+     })();
+ 
+diff --git a/src/app/t.const.ts b/src/app/t.const.ts
+index 2a1708586fc01992ffe7e8424ab487c924d13ba1..e620dd0b1a6ed958673bdde02461f9eafe2a44f3 100644
+--- a/src/app/t.const.ts
++++ b/src/app/t.const.ts
+@@ -3440,6 +3440,7 @@ const T = {
+     NO_TASKS: 'PDS.NO_TASKS',
+     PLAN_TOMORROW: 'PDS.PLAN_TOMORROW',
+     REVIEW_TASKS: 'PDS.REVIEW_TASKS',
++    COMPLETED_WITHOUT_TIME: 'PDS.COMPLETED_WITHOUT_TIME',
+     ROUND_5M: 'PDS.ROUND_5M',
+     ROUND_15M: 'PDS.ROUND_15M',
+     ROUND_30M: 'PDS.ROUND_30M',
+diff --git a/src/assets/i18n/en.json b/src/assets/i18n/en.json
+index 2d7255e478b03672ab9b44ae7ec0869ef0c27c7b..0435242201627208ff5fa7d391904e96a960af00 100644
+--- a/src/assets/i18n/en.json
++++ b/src/assets/i18n/en.json
+@@ -3358,6 +3358,7 @@
+     "NO_TASKS": "There are no tasks for this day",
+     "PLAN_TOMORROW": "Plan",
+     "REVIEW_TASKS": "Review",
++    "COMPLETED_WITHOUT_TIME": "Completed without time",
+     "ROUND_5M": "Round all tasks to 5 minutes",
+     "ROUND_15M": "Round all tasks to 15 minutes",
+     "ROUND_30M": "Round all tasks to 30 minutes",

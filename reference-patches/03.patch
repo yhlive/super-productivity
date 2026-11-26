@@ -1,0 +1,130 @@
+diff --git a/src/app/pages/daily-summary/daily-summary.component.html b/src/app/pages/daily-summary/daily-summary.component.html
+index 1a5fc63f29453cf3d48dffa0a91426e79c3b1ec5..c576e7163b591bdc5d82e607f7d5dea14badb2c5 100644
+--- a/src/app/pages/daily-summary/daily-summary.component.html
++++ b/src/app/pages/daily-summary/daily-summary.component.html
+@@ -191,6 +191,19 @@
+             }
+           }
+           @if (tasks.length) {
++            @if (estimateOverruns$ | async; as overruns) {
++              @if (overruns.length) {
++                <section>
++                  <h2>{{ T.PDS.ESTIMATE_OVERRUNS | translate }}</h2>
++                  <p>{{ T.PDS.ESTIMATE_OVERRUNS_THRESHOLD | translate }}</p>
++                  <ol>
++                    @for (row of overruns; track row.task.id) {
++                      <li>{{ row.task.title }} (+{{ row.overrun | msToClockString }})</li>
++                    }
++                  </ol>
++                </section>
++              }
++            }
+             <task-summary-tables
+               [dayStr]="dayStr"
+               [flatTasks]="tasks"
+diff --git a/src/app/pages/daily-summary/daily-summary.component.ts b/src/app/pages/daily-summary/daily-summary.component.ts
+index e5b66056ce92ba464208e8b391ebe7817daaf0d8..a6ebdf2f1e8dee770772769eb737361bf1857c47 100644
+--- a/src/app/pages/daily-summary/daily-summary.component.ts
++++ b/src/app/pages/daily-summary/daily-summary.component.ts
+@@ -76,6 +76,7 @@ import { unToggleCheckboxesInMarkdownTxt } from '../../util/untoggle-checkboxes-
+ import { PlanTasksTomorrowComponent } from './plan-tasks-tomorrow/plan-tasks-tomorrow.component';
+ import { PlanTasksNextWeekComponent } from './plan-tasks-next-week/plan-tasks-next-week.component';
+ import { isFinishWeekScope } from './finish-week.util';
++import { estimateOverruns } from './estimate-overruns';
+ import { completedWithoutTime } from './completed-without-time';
+ import { getDbDateStrWithOffset } from '../../util/get-db-date-str';
+ import { DialogTimeEstimateComponent } from '../../features/tasks/dialog-time-estimate/dialog-time-estimate.component';
+@@ -220,6 +221,10 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
+ 
+   isArchiveLoaded = signal(false);
+ 
++  readonly estimateOverruns$ = this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
++    map(estimateOverruns),
++  );
++
+   hasTasksForToday$: Observable<boolean> = this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
+     map((tasks) => tasks && !!tasks.length),
+   );
+diff --git a/src/app/pages/daily-summary/estimate-overruns.spec.ts b/src/app/pages/daily-summary/estimate-overruns.spec.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..3c31475f4bb93c254230fdb011009a85a46aa799
+--- /dev/null
++++ b/src/app/pages/daily-summary/estimate-overruns.spec.ts
+@@ -0,0 +1,30 @@
++import { DEFAULT_TASK, Task } from '../../features/tasks/task.model';
++import { estimateOverruns } from './estimate-overruns';
++
++describe('Estimate overruns', () => {
++  const minute = 60_000;
++  const task = (id: string, estimate: number, actual: number): Task => ({
++    ...DEFAULT_TASK,
++    id,
++    projectId: 'demo',
++    timeEstimate: estimate * minute,
++    timeSpent: actual * minute,
++  });
++
++  it('includes the boundary, sorts by overrun and breaks ties by ID', () => {
++    const input = [task('b', 30, 60), task('a', 15, 45), task('big', 30, 90)];
++    expect(estimateOverruns(input).map(({ task: row }) => row.id)).toEqual([
++      'big',
++      'a',
++      'b',
++    ]);
++    expect(input[0].id).toBe('b');
++  });
++
++  it('excludes unknown estimates, parent totals, and differences below the threshold', () => {
++    const parent = { ...task('parent', 10, 90), subTaskIds: ['child'] };
++    expect(
++      estimateOverruns([parent, task('no-estimate', 0, 80), task('short', 30, 59)]),
++    ).toEqual([]);
++  });
++});
+diff --git a/src/app/pages/daily-summary/estimate-overruns.ts b/src/app/pages/daily-summary/estimate-overruns.ts
+new file mode 100644
+index 0000000000000000000000000000000000000000..336a89a7d70139e15ed339fa3682a6c71294982a
+--- /dev/null
++++ b/src/app/pages/daily-summary/estimate-overruns.ts
+@@ -0,0 +1,15 @@
++import { Task } from '../../features/tasks/task.model';
++
++const minimumOverrun = 30 * 60 * 1000;
++
++export interface EstimateOverrun {
++  task: Task;
++  overrun: number;
++}
++
++export const estimateOverruns = (tasks: readonly Task[]): EstimateOverrun[] =>
++  tasks
++    .filter((task) => !task.subTaskIds?.length && task.timeEstimate > 0)
++    .map((task) => ({ task, overrun: task.timeSpent - task.timeEstimate }))
++    .filter(({ overrun }) => overrun >= minimumOverrun)
++    .sort((a, b) => b.overrun - a.overrun || a.task.id.localeCompare(b.task.id));
+diff --git a/src/app/t.const.ts b/src/app/t.const.ts
+index e620dd0b1a6ed958673bdde02461f9eafe2a44f3..b40fc50ee7d8a0010063d251eaeeb62376d6fd1b 100644
+--- a/src/app/t.const.ts
++++ b/src/app/t.const.ts
+@@ -3440,6 +3440,8 @@ const T = {
+     NO_TASKS: 'PDS.NO_TASKS',
+     PLAN_TOMORROW: 'PDS.PLAN_TOMORROW',
+     REVIEW_TASKS: 'PDS.REVIEW_TASKS',
++    ESTIMATE_OVERRUNS: 'PDS.ESTIMATE_OVERRUNS',
++    ESTIMATE_OVERRUNS_THRESHOLD: 'PDS.ESTIMATE_OVERRUNS_THRESHOLD',
+     COMPLETED_WITHOUT_TIME: 'PDS.COMPLETED_WITHOUT_TIME',
+     ROUND_5M: 'PDS.ROUND_5M',
+     ROUND_15M: 'PDS.ROUND_15M',
+diff --git a/src/assets/i18n/en.json b/src/assets/i18n/en.json
+index 0435242201627208ff5fa7d391904e96a960af00..46040bf19af415693b78044f3c513857793ac860 100644
+--- a/src/assets/i18n/en.json
++++ b/src/assets/i18n/en.json
+@@ -3358,6 +3358,8 @@
+     "NO_TASKS": "There are no tasks for this day",
+     "PLAN_TOMORROW": "Plan",
+     "REVIEW_TASKS": "Review",
++    "ESTIMATE_OVERRUNS": "Estimate overruns",
++    "ESTIMATE_OVERRUNS_THRESHOLD": "At least 30 minutes over the total estimate.",
+     "COMPLETED_WITHOUT_TIME": "Completed without time",
+     "ROUND_5M": "Round all tasks to 5 minutes",
+     "ROUND_15M": "Round all tasks to 15 minutes",

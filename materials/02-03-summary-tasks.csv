@@ -1,0 +1,7 @@
+Title,Estimate minutes,Logged minutes,Completed today,Purpose
+Publish the new FAQ,0,0,yes,Untimed
+Send copy for review,0,0,no,Open
+Write onboarding notes,30,60,yes,Exact overrun threshold
+Prepare vendor data,45,120,yes,Large overrun
+Review accessibility notes,30,59,yes,Below threshold
+Collect launch feedback,0,75,yes,Missing estimate
