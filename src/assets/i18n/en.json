@@ -3358,6 +3358,8 @@
     "NO_TASKS": "There are no tasks for this day",
     "PLAN_TOMORROW": "Plan",
     "REVIEW_TASKS": "Review",
+    "ESTIMATE_OVERRUNS": "Estimate overruns",
+    "ESTIMATE_OVERRUNS_THRESHOLD": "At least 30 minutes over the estimate.",
     "COMPLETED_WITHOUT_TIME": "Completed without time",
     "ROUND_5M": "Round all tasks to 5 minutes",
     "ROUND_15M": "Round all tasks to 15 minutes",

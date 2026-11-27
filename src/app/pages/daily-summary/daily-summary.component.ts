@@ -76,6 +76,7 @@ import { unToggleCheckboxesInMarkdownTxt } from '../../util/untoggle-checkboxes-
 import { PlanTasksTomorrowComponent } from './plan-tasks-tomorrow/plan-tasks-tomorrow.component';
 import { PlanTasksNextWeekComponent } from './plan-tasks-next-week/plan-tasks-next-week.component';
 import { isFinishWeekScope } from './finish-week.util';
+import { estimateOverruns } from './extimate-overruns';
 import { completedWithoutTime } from './completed-without-time';
 import { getDbDateStrWithOffset } from '../../util/get-db-date-str';
 import { DialogTimeEstimateComponent } from '../../features/tasks/dialog-time-estimate/dialog-time-estimate.component';
@@ -222,6 +223,10 @@ export class DailySummaryComponent implements OnInit, OnDestroy, AfterViewInit {
     });
   }
   isArchiveLoaded = signal(false);
+
+  readonly estimateOverruns$ = this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
+    map(estimateOverruns),
+  );
 
   hasTasksForToday$: Observable<boolean> = this.tasksWorkedOnOrDoneOrRepeatableFlat$.pipe(
     map((tasks) => tasks && !!tasks.length),

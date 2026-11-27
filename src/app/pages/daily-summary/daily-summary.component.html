@@ -191,6 +191,20 @@
             }
           }
           @if (tasks.length) {
+            @if (estimateOverruns$ | async; as overruns) {
+              @if (overruns.length) {
+                <section>
+                  <h2>{{ T.PDS.ESTIMATE_OVERRUNS | translate }}</h2>
+                  <p>{{ T.PDS.ESTIMATE_OVERRUNS_THRESHOLD | translate }}</p>
+                  <ol>
+                    @for (task of overruns; track task.id) {
+                      <li>{{ row.task.title }} (+{{ row.overrun | msToClockString }})</li>
+                    }
+                  </ol>
+                </section>
+              }
+            }
+
             <task-summary-tables
               [dayStr]="dayStr"
               [flatTasks]="tasks"
